@@ -1,0 +1,1 @@
+# TapTap Android Dependency Resolver
