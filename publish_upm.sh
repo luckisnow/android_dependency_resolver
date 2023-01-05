@@ -34,7 +34,7 @@ publishUPM() {
     
     git fetch --unshallow github_upm
     
-    git push "AndroidDependencyResolver" github_upm --force --tags
+    git push "AndroidDependencyResolver" main --force --tags
     
     git checkout "$currentBranch" --force
         
