@@ -40,5 +40,5 @@ publishUPM() {
         
 }
 for ((i=0;i<${#upmModule[@]};i++)); do
-    publishUPM "${module[$i]}" "${upmModule[$i]}" "$tag" "${githubRepoName[$i]}" 
+    publishUPM "${upmModule[$i]}" "$tag" "${githubRepoName[$i]}" 
 done
