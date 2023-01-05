@@ -70,7 +70,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     }
                     catch (Exception e)
                     {
-                        Debug.LogErrorFormat($"[Tap::AndroidGradleProcessor] Deserialize AndroidGradleContextProvider Error! Error Msg:\n{e.Message}\nError Stack:\n{e.StackTrace}");
+                        Debug.LogErrorFormat(string.Format("[Tap::AndroidGradleProcessor] Deserialize AndroidGradleContextProvider Error! Error Msg:\n{0}\nError Stack:\n{1}", e.Message, e.StackTrace));
                     }
                 }
             }
@@ -119,7 +119,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
             {
                 if (match == null || match.Success == false)
                 {
-                    Debug.LogWarningFormat($"Couldn't find Custom Gradle Template Location! Gradle Type: {gradleContext.templateType} Location Type: {gradleContext.locationType} Location Param: {gradleContext.locationParam}");
+                    Debug.LogWarningFormat(string.Format("Couldn't find Custom Gradle Template Location! Gradle Type: {0} Location Type: {1} Location Param: {2}", gradleContext.templateType, gradleContext.locationType,gradleContext.locationParam));
                     return;
                 }
                 
@@ -253,7 +253,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     if (importVersion == builtinVersion) return false;
                     // 如果是替换的话,不需要添加注释
                     if (gradleContext.processType == AndroidGradleProcessType.Replace) return true;
-                    Debug.LogWarningFormat("[TapTap:AndroidGradlePostProcessor] Detect Package Collision! Gradle File: {0} Process Content: {1} Collision Content: {2}", gradleContext.templateType, eachContext, builtinMatch.Value);
+                    Debug.LogWarningFormat(string.Format("[TapTap:AndroidGradlePostProcessor] Detect Package Collision! Gradle File: {0} Process Content: {1} Collision Content: {2}", gradleContext.templateType, eachContext, builtinMatch.Value));
                     // 引入版本更低,那就不用引入了
                     if (importVersion < builtinVersion) return false;
                     // 引入版本更高,把已经存在的版本注释掉
