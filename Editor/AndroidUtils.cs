@@ -119,7 +119,8 @@ namespace TapTap.AndroidDependencyResolver.Editor
             {
                 if (match == null || match.Success == false)
                 {
-                    Debug.LogWarningFormat(string.Format("Couldn't find Custom Gradle Template Location! Gradle Type: {0} Location Type: {1} Location Param: {2}", gradleContext.templateType, gradleContext.locationType,gradleContext.locationParam));
+                    var msg = string.Format("Couldn't find Custom Gradle Template Location! Gradle Type: {0} Location Type: {1} Location Param: {2}", gradleContext.templateType, gradleContext.locationType, gradleContext.locationParam);
+                    Debug.LogWarning(msg);
                     return;
                 }
                 
