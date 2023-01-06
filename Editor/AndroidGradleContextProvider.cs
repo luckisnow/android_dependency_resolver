@@ -27,6 +27,18 @@ namespace TapTap.AndroidDependencyResolver.Editor
             get; 
             set;
         }
+        
+        /// <summary>
+        /// 版本号
+        /// </summary>
+        [JsonProperty]
+        public int Version = 1;
+        
+        /// <summary>
+        /// 是否使用
+        /// </summary>
+        [JsonProperty]
+        public bool Use = true;
     }
 }
 #endif

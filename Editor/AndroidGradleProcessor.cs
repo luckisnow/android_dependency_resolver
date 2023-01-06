@@ -10,6 +10,9 @@ namespace TapTap.AndroidDependencyResolver.Editor
 {
     public class AndroidGradleProcessor : IPreprocessBuildWithReport, IPostGenerateGradleAndroidProject
     {
+        // 当前版本
+        private const int VERSION = 1;
+        
         private static Dictionary<CustomTemplateType, bool> gardleTemplateToggleRecord = new Dictionary<CustomTemplateType, bool>();
 
         public const int CALLBACK_ORDER = 1100;
@@ -42,6 +45,8 @@ namespace TapTap.AndroidDependencyResolver.Editor
             {
                 var provider = providers[i];
                 if (provider.AndroidGradleContext == null) continue;
+                if (provider.Use == false) continue;
+                if (provider.Version != VERSION) continue;
                 foreach (var context in provider.AndroidGradleContext)
                 {
                     try
