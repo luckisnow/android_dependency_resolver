@@ -38,15 +38,31 @@ namespace TapTap.AndroidDependencyResolver.Editor
             }
             
             var providers = AndroidUtils.Load();
+            
+            Debug.LogFormat($"[TapTap.AGCP] Load Provider Count: {providers?.Count ?? -1}");
             if (providers == null) return;
 
             i = 0;
             for (; i < providers.Count; i++)
             {
                 var provider = providers[i];
-                if (provider.AndroidGradleContext == null) continue;
-                if (provider.Use == false) continue;
-                if (provider.Version != VERSION) continue;
+                if (provider.AndroidGradleContext == null)
+                {
+                    Debug.LogFormat($"[TapTap.AGCP] Provider: {provider.ModuleName} return! since : provider.AndroidGradleContext == null");
+                    continue;
+                }
+
+                if (provider.Use == false)
+                {
+                    Debug.LogFormat($"[TapTap.AGCP] Provider: {provider.ModuleName} return! since : provider.Use == false");
+                    continue;
+                }
+
+                if (provider.Version != VERSION)
+                {
+                    Debug.LogFormat($"[TapTap.AGCP] Provider: {provider.ModuleName} return! since : provider.Version != VERSION");
+                    continue;
+                }
                 foreach (var context in provider.AndroidGradleContext)
                 {
                     try

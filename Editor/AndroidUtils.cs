@@ -43,6 +43,13 @@ namespace TapTap.AndroidDependencyResolver.Editor
             }
             if (assetDatabaseRefresh) AssetDatabase.Refresh();
         }
+
+        [MenuItem("XD/Common/Process")]
+        public static void Process()
+        {
+            var temp = new AndroidGradleProcessor();
+            temp.OnPreprocessBuild(null);
+        }
         
         public static List<AndroidGradleContextProvider> Load()
         {
@@ -96,7 +103,11 @@ namespace TapTap.AndroidDependencyResolver.Editor
         private static void ProcessEachContext(AndroidGradleContext gradleContext, string eachContext, FileInfo gradleTemplateFileInfo, bool apeendNewline = false)
         {
             // 检查 Unity 版本
-            if (UnityVersionValidate(gradleContext) == false) return;
+            if (UnityVersionValidate(gradleContext) == false)
+            {
+                Debug.LogFormat($"[TapTap.AGCP] Unity Version not Validate! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {gradleContext.processContent}");
+                return;
+            }
             
             var contents = File.ReadAllText(gradleTemplateFileInfo.FullName);
                 
@@ -119,7 +130,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
             {
                 if (match == null || match.Success == false)
                 {
-                    var msg = string.Format("Couldn't find Custom Gradle Template Location! Gradle Type: {0} Location Type: {1} Location Param: {2}", gradleContext.templateType, gradleContext.locationType, gradleContext.locationParam);
+                    var msg = string.Format("[TapTap.AGCP] Couldn't find Custom Gradle Template Location! Gradle Type: {0} Location Type: {1} Location Param: {2}", gradleContext.templateType, gradleContext.locationType, gradleContext.locationParam);
                     Debug.LogWarning(msg);
                     return;
                 }
@@ -135,10 +146,18 @@ namespace TapTap.AndroidDependencyResolver.Editor
             }
             
             // 已经替换过的情况
-            if (HadWrote(gradleContext, eachContext, contents, index)) return;
+            if (HadWrote(gradleContext, eachContext, contents, index))
+            {
+                Debug.LogFormat($"[TapTap.AGCP] Gradle Content had wroten! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {gradleContext.processContent}");
+                return;
+            }
             // 检查是否需要引入,不能引入的原因是 gradle 已经存在 >= package 的版本
             var needImport = CheckNeedImport(gradleContext, eachContext, contents, gradleTemplateFileInfo, ref index, out string fixedContents);
-            if (needImport == false) return;
+            if (needImport == false)
+            {
+                Debug.LogFormat($"[TapTap.AGCP] Gradle Content don't need Import! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {gradleContext.processContent}");
+                return;
+            }
             if (false == string.IsNullOrEmpty(fixedContents)) contents = fixedContents;
             
             // 替换新的修改内容
@@ -153,7 +172,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     string.Format("{0}{1}", eachContext, apeendNewline ? "\n" : ""));
                 newContents = replaceContent;
             }
-                
+            Debug.LogFormat($"[TapTap.AGCP] Write Gradle Content Successful! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {gradleContext.processContent}");
             File.WriteAllText(gradleTemplateFileInfo.FullName, newContents);
         }
         
@@ -254,7 +273,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     if (importVersion == builtinVersion) return false;
                     // 如果是替换的话,不需要添加注释
                     if (gradleContext.processType == AndroidGradleProcessType.Replace) return true;
-                    Debug.LogWarningFormat(string.Format("[TapTap:AndroidGradlePostProcessor] Detect Package Collision! Gradle File: {0} Process Content: {1} Collision Content: {2}", gradleContext.templateType, eachContext, builtinMatch.Value));
+                    Debug.LogWarningFormat(string.Format("[TapTap.AGCP] Detect Package Collision! Gradle File: {0} Process Content: {1} Collision Content: {2}", gradleContext.templateType, eachContext, builtinMatch.Value));
                     // 引入版本更低,那就不用引入了
                     if (importVersion < builtinVersion) return false;
                     // 引入版本更高,把已经存在的版本注释掉
@@ -306,6 +325,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
             {
                 if (File.Exists(str))
                 {
+                    Debug.LogFormat($"[TapTap.AGCP] Re-Create Gradle Template! Gradle Template Name: {assetFile}");
                     AssetDatabase.MoveAsset(str, assetFile);
                     return new FileInfo(assetFile);
                 }
@@ -314,9 +334,15 @@ namespace TapTap.AndroidDependencyResolver.Editor
                 if (!Directory.Exists(directoryName))
                     Directory.CreateDirectory(directoryName);
                 if (File.Exists(originalFile))
+                {
+                    Debug.LogFormat($"[TapTap.AGCP] Copy Built-in Gradle Template to Project! Gradle Template Name: {assetFile}");
                     File.Copy(originalFile, assetFile);
+                }
                 else
+                {
+                    Debug.LogErrorFormat($"[TapTap.AGCP] Built-in Gradle Template doesn't exist! Gradle Template Name: {assetFile}");
                     File.Create(assetFile).Dispose();
+                }
                 AssetDatabase.Refresh();
                 return new FileInfo(assetFile);
             }

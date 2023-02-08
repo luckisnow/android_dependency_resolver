@@ -1,6 +1,6 @@
 {
   "name": "com.tapsdk.androiddependencyresolver",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "displayName": "TapTap Android Dependency Resolver",
   "description": "TapTap Android Dependency Resolver",
   "unity": "2018.4",
