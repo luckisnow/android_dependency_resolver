@@ -30,8 +30,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
         public void OnPreprocessBuild(BuildReport report)
         {
             gardleTemplateToggleRecord.Clear();
-            var i = (int)CustomTemplateType.AndroidManifest;
-            for (; i <= (int)CustomTemplateType.GradleProperties; i++)
+            for (int i = (int)CustomTemplateType.AndroidManifest; i <= (int)CustomTemplateType.GradleProperties; i++)
             {
                 var haveCustomGradleTemplate = AndroidUtils.HaveCustomTemplateFile((CustomTemplateType)i);
                 gardleTemplateToggleRecord.Add((CustomTemplateType)i, haveCustomGradleTemplate);
@@ -42,8 +41,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
             Debug.LogFormat($"[TapTap.AGCP] Load Provider Count: {providers?.Count ?? -1}");
             if (providers == null) return;
 
-            i = 0;
-            for (; i < providers.Count; i++)
+            for (int i = 0; i < providers.Count; i++)
             {
                 var provider = providers[i];
                 if (provider.AndroidGradleContext == null)
@@ -72,7 +70,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     catch (Exception e)
                     {
                         Debug.LogErrorFormat(
-                            $"[Tap::AndroidGradleProcessor] Process Custom Gradle Context Error! Error Msg:\n{e.Message}\nError Stack:\n{e.StackTrace}");
+                            $"[TapTap.AGCP] Process Custom Gradle Context Error! Error Msg:\n{e.Message}\nError Stack:\n{e.StackTrace}");
                     }
                 }
             }

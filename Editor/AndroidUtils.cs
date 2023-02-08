@@ -77,7 +77,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     }
                     catch (Exception e)
                     {
-                        Debug.LogErrorFormat(string.Format("[Tap::AndroidGradleProcessor] Deserialize AndroidGradleContextProvider Error! Error Msg:\n{0}\nError Stack:\n{1}", e.Message, e.StackTrace));
+                        Debug.LogErrorFormat(string.Format("[TapTap.AGCP] Deserialize AndroidGradleContextProvider Error! Error Msg:\n{0}\nError Stack:\n{1}", e.Message, e.StackTrace));
                     }
                 }
             }
@@ -90,7 +90,11 @@ namespace TapTap.AndroidDependencyResolver.Editor
             if (gradleContext == null) return;
             // 打开 Gradle 模板
             var fileInfo = ToggleCustomTemplateFile(gradleContext.templateType, true);
-            if (fileInfo == null) return;
+            if (fileInfo == null)
+            {
+                Debug.LogFormat($"[TapTap.AGCP] fileInfo == null return! gradleContext.template: {gradleContext.templateType}, gradleContext.Content: {string.Join("||", gradleContext.processContent)}");
+                return;
+            }
             // 逐行解决依赖
             for (var i = 0; i < gradleContext.processContent.Count; i++)
             {
@@ -105,7 +109,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
             // 检查 Unity 版本
             if (UnityVersionValidate(gradleContext) == false)
             {
-                Debug.LogFormat($"[TapTap.AGCP] Unity Version not Validate! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {gradleContext.processContent}");
+                Debug.LogFormat($"[TapTap.AGCP] Unity Version not Validate! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {eachContext}");
                 return;
             }
             
@@ -148,14 +152,14 @@ namespace TapTap.AndroidDependencyResolver.Editor
             // 已经替换过的情况
             if (HadWrote(gradleContext, eachContext, contents, index))
             {
-                Debug.LogFormat($"[TapTap.AGCP] Gradle Content had wroten! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {gradleContext.processContent}");
+                Debug.LogFormat($"[TapTap.AGCP] Gradle Content had wroten! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {eachContext}");
                 return;
             }
             // 检查是否需要引入,不能引入的原因是 gradle 已经存在 >= package 的版本
             var needImport = CheckNeedImport(gradleContext, eachContext, contents, gradleTemplateFileInfo, ref index, out string fixedContents);
             if (needImport == false)
             {
-                Debug.LogFormat($"[TapTap.AGCP] Gradle Content don't need Import! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {gradleContext.processContent}");
+                Debug.LogFormat($"[TapTap.AGCP] Gradle Content don't need Import! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {eachContext}");
                 return;
             }
             if (false == string.IsNullOrEmpty(fixedContents)) contents = fixedContents;
@@ -172,7 +176,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     string.Format("{0}{1}", eachContext, apeendNewline ? "\n" : ""));
                 newContents = replaceContent;
             }
-            Debug.LogFormat($"[TapTap.AGCP] Write Gradle Content Successful! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {gradleContext.processContent}");
+            Debug.LogFormat($"[TapTap.AGCP] Write Gradle Content Successful! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {eachContext}");
             File.WriteAllText(gradleTemplateFileInfo.FullName, newContents);
         }
         
@@ -461,7 +465,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
         //             }
         //             catch (Exception e)
         //             {
-        //                 Debug.LogErrorFormat($"[Tap::AndroidGradleProcessor] Process Custom Gradle Context Error! Error Msg:\n{e.Message}\nError Stack:\n{e.StackTrace}");
+        //                 Debug.LogErrorFormat($"[TapTap.AGCP] Process Custom Gradle Context Error! Error Msg:\n{e.Message}\nError Stack:\n{e.StackTrace}");
         //             }
         //         }
         //     }
