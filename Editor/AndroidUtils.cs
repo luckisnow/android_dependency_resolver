@@ -44,7 +44,6 @@ namespace TapTap.AndroidDependencyResolver.Editor
             if (assetDatabaseRefresh) AssetDatabase.Refresh();
         }
 
-        [MenuItem("XD/Common/Process")]
         public static void Process()
         {
             var temp = new AndroidGradleProcessor();
