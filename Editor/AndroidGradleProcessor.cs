@@ -46,19 +46,19 @@ namespace TapTap.AndroidDependencyResolver.Editor
                 var provider = providers[i];
                 if (provider.AndroidGradleContext == null)
                 {
-                    Debug.LogFormat($"[TapTap.AGCP] Provider: {provider.ModuleName} return! since : provider.AndroidGradleContext == null");
+                    Debug.LogFormat("[TapTap.AGCP] Provider: {0} return! since : provider.AndroidGradleContext == null", 0);
                     continue;
                 }
 
                 if (provider.Use == false)
                 {
-                    Debug.LogFormat($"[TapTap.AGCP] Provider: {provider.ModuleName} return! since : provider.Use == false");
+                    Debug.LogFormat("[TapTap.AGCP] Provider: {0} return! since : provider.Use == false", 0);
                     continue;
                 }
 
                 if (provider.Version != VERSION)
                 {
-                    Debug.LogFormat($"[TapTap.AGCP] Provider: {provider.ModuleName} return! since : provider.Version != VERSION");
+                    Debug.LogFormat("[TapTap.AGCP] Provider: {0} return! since : provider.Version != VERSION", 0);
                     continue;
                 }
                 foreach (var context in provider.AndroidGradleContext)

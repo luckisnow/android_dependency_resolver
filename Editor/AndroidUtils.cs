@@ -91,7 +91,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
             var fileInfo = ToggleCustomTemplateFile(gradleContext.templateType, true);
             if (fileInfo == null)
             {
-                Debug.LogFormat($"[TapTap.AGCP] fileInfo == null return! gradleContext.template: {gradleContext.templateType}, gradleContext.Content: {string.Join("||", gradleContext.processContent)}");
+                Debug.LogFormat("[TapTap.AGCP] fileInfo == null return! gradleContext.template: {0}, gradleContext.Content: {1}", gradleContext.templateType, string.Join("||", gradleContext.processContent));
                 return;
             }
             // 逐行解决依赖
@@ -175,8 +175,8 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     string.Format("{0}{1}", eachContext, apeendNewline ? "\n" : ""));
                 newContents = replaceContent;
             }
-            Debug.LogFormat($"[TapTap.AGCP] Write Gradle Content Successful! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {eachContext}");
             File.WriteAllText(gradleTemplateFileInfo.FullName, newContents);
+            Debug.LogFormat("[TapTap.AGCP] Write Gradle Content Successful! Gradle Template Name: {0} gradleContext Content: {1}", gradleTemplateFileInfo.Name, eachContext);
         }
         
         private static bool UnityVersionValidate(AndroidGradleContext gradleContext)
