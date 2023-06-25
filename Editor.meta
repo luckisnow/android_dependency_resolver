@@ -1,3 +1,12 @@
 fileFormatVersion: 2
 guid: 38bea3bef313450ebe60ed7e8e9f65d0
-timeCreated: 1672282774
+labels:
+- gvh
+- gvh_version-100.0.9
+- gvhp-exportPath-TapTap/AndroidDependencyResolver/Editor
+folderAsset: yes
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

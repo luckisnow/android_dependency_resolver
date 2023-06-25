@@ -1,5 +1,9 @@
 fileFormatVersion: 2
 guid: d715182ecfa7f4d758edada811f765d1
+labels:
+- gvh
+- gvh_version-100.0.9
+- gvhp-exportPath-TapTap/AndroidDependencyResolver/README.md
 TextScriptImporter:
   externalObjects: {}
   userData: 

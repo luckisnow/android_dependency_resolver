@@ -1,3 +1,15 @@
 fileFormatVersion: 2
 guid: de8be490469542f19f5850e20cf834da
-timeCreated: 1671420871
+labels:
+- gvh
+- gvh_version-100.0.9
+- gvhp-exportPath-TapTap/AndroidDependencyResolver/Editor/AndroidGradleContext.cs
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

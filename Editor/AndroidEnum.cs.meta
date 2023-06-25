@@ -1,3 +1,15 @@
 fileFormatVersion: 2
 guid: 9274abae6f2e46c79f564b85c3b2011c
-timeCreated: 1671507354
+labels:
+- gvh
+- gvh_version-100.0.9
+- gvhp-exportPath-TapTap/AndroidDependencyResolver/Editor/AndroidEnum.cs
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
