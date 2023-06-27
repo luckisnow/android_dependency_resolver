@@ -4,7 +4,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Regex = System.Text.RegularExpressions.Regex;
 using LC.Newtonsoft.Json;
 
@@ -29,6 +33,10 @@ namespace TapTap.AndroidDependencyResolver.Editor
         private static string _CustomBaseGradleTemplate;
         private static string _InternalGradlePropertiesTemplate;
         private static string _CustomGradlePropertiesTemplate;
+
+        private static Regex _DependenciesRegex = new Regex(@".*[/\\]Editor[/\\].*Dependencies\.xml$"); 
+        private const string DEPENDENCIES_MODULE_NAME = "EDU4M_DEPEDENCY";
+        private const string DEPENDENCIES_FILE_NAME = "Assets/TapTap/AutoGenerate/Editor/TapTapAGPDependencies.xml";
 
         public static void SaveProvider(string path, AndroidGradleContextProvider provider, bool assetDatabaseRefresh = true)
         {
@@ -82,6 +90,167 @@ namespace TapTap.AndroidDependencyResolver.Editor
             }
             providers.Sort((a,b)=> a.Priority.CompareTo(b.Priority));
             return providers;
+        }
+
+        private static MethodInfo GetEDM4UResolveMethod()
+        {
+            Type playServicesResolverType = Type.GetType("GooglePlayServices.PlayServicesResolver, Google.JarResolver");
+
+            if (playServicesResolverType != null)
+            {
+                // 获取 ExecuteMenuResolve 方法
+                MethodInfo executeMenuResolveMethod = playServicesResolverType.GetMethod("Resolve",
+                    BindingFlags.Public | BindingFlags.Static);
+
+                if (executeMenuResolveMethod != null)
+                {
+                    // 检查方法签名是否一致
+                    ParameterInfo[] parameters = executeMenuResolveMethod.GetParameters();
+                    var validate = executeMenuResolveMethod.IsStatic &&
+                                     executeMenuResolveMethod.ReturnType == typeof(void);
+                    if (validate)
+                        return executeMenuResolveMethod;
+                }
+            }
+
+            return null;
+        }
+        
+        private static bool HaveEDM4U()
+        {
+            return GetEDM4UResolveMethod() != null;
+        }
+
+        private static bool IsDepsContext(AndroidGradleContext context)
+        {
+            return context != null && context.locationType == AndroidGradleLocationType.Builtin &&
+                   context.locationParam == "DEPS" && context.templateType == CustomTemplateType.UnityMainGradle &&
+                   context.processType == AndroidGradleProcessType.Insert;
+        }
+
+        private static void GenerateDependencies(List<AndroidGradleContextProvider> providers)
+        {
+            List<AndroidGradleContext> deps = new List<AndroidGradleContext>();
+            foreach (var provider in providers)
+            {
+                if (provider.AndroidGradleContext == null || provider.AndroidGradleContext.Count <= 0) continue;
+                foreach (var androidGradleContext in provider.AndroidGradleContext)
+                {
+                    if (IsDepsContext(androidGradleContext))
+                    {
+                        deps.Add(androidGradleContext);
+                    }
+                }
+            }
+
+            var filePath = UnityPath2AbsolutePath(DEPENDENCIES_FILE_NAME);
+            // check filePath is exist,if clean it content
+            if (File.Exists(filePath))
+            {
+                File.WriteAllText(filePath, string.Empty);
+            }
+            else
+            {
+                var dir = Path.GetDirectoryName(filePath);
+                if (!Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                // create a new file
+                File.Create(filePath).Dispose();
+            }
+
+            StringBuilder sb = new StringBuilder();
+            foreach (var dep in deps)
+            {
+                foreach (var processContent in dep.processContent)
+                {
+                    sb.AppendLine(processContent);
+                }
+            }
+            
+            ParseDependencies(sb.ToString(), filePath);
+        }
+        
+        // 将输入的依赖项字符串解析为 XML 文档
+        private static void ParseDependencies(string inputText, string outputPath)
+        {
+            // 解析每一行依赖项
+            var androidPackages = inputText.Split('\n')
+                .Select(line => line.Trim())
+                .Where(line => line.StartsWith("implementation"))
+                .Select(line => {
+                    string[] parts = line.Split('\'', '\"');
+                    // 获取第二段字符串作为 spec
+                    string spec = parts[1];
+                    return new XElement("androidPackage", new XAttribute("spec", spec));
+                });
+
+            // 创建 XML 文档
+            XDocument doc = new XDocument(
+                new XElement("dependencies",
+                    new XElement("androidPackages", androidPackages)
+                )
+            );
+
+            // 将 XML 文档保存到文件
+            doc.Save(outputPath);
+        }
+        
+        private static AndroidGradleContextProvider GetDependencies()
+        {
+            var dependenciesPath = LoadDependencies();
+            List<string> deps = new List<string>();
+            foreach (var filename in dependenciesPath) {
+                var doc = XDocument.Load(UnityPath2AbsolutePath(filename)); 
+                List<string> specs = doc.Descendants("androidPackage")
+                    .Attributes("spec")
+                    .Select(attr => $"    implementation \"{attr.Value}\"")    
+                    .ToList();
+                deps.AddRange(specs);
+            }
+            var provider = new AndroidGradleContextProvider();
+            provider.Priority = 9999;
+            provider.ModuleName = DEPENDENCIES_MODULE_NAME;
+            provider.AndroidGradleContext = new List<AndroidGradleContext>();
+            provider.AndroidGradleContext.Add(new AndroidGradleContext()
+            {
+                locationType = AndroidGradleLocationType.Builtin,
+                unityVersionCompatibleType = UnityVersionCompatibleType.EveryVersion,
+                templateType = CustomTemplateType.UnityMainGradle,
+                processType = AndroidGradleProcessType.Insert,
+                locationParam = "DEPS",
+                processContent = deps,
+            });
+            return provider;
+        }
+        
+        private static string UnityPath2AbsolutePath(string unityPath)
+        {
+            if (string.IsNullOrEmpty(unityPath)) return "";
+            // convert relative path to absolute path
+            return Application.dataPath.Replace("Assets", unityPath);
+        }
+
+        private static string[] LoadDependencies()
+        {
+            var guids = AssetDatabase.FindAssets("TapTapAGPDependencies t:TextAsset", new[] { "Assets"});
+            HashSet<string> matchingEntries = new HashSet<string>();
+            foreach (string assetGuid in guids) {
+                string filename = AssetDatabase.GUIDToAssetPath(assetGuid);
+                // Ignore non-existent files as it's possible for the asset database to reference
+                // missing files if it hasn't been refreshed or completed a refresh.
+                if (File.Exists(filename) || Directory.Exists(filename))
+                {
+                    if (_DependenciesRegex.Match(filename).Success)
+                    {
+                        matchingEntries.Add(filename);
+                    }
+                }
+            }
+            string[] entries = new string[matchingEntries.Count];
+            matchingEntries.CopyTo(entries);
+            return entries;
         }
         
         public static void ProcessCustomGradleContext(AndroidGradleContext gradleContext)
@@ -167,6 +336,11 @@ namespace TapTap.AndroidDependencyResolver.Editor
             string newContents = null;
             if (gradleContext.processType == AndroidGradleProcessType.Insert)
             {
+                // DEPS 中 ' 和 " 是相同的含义,所以需要特殊处理
+                if (gradleContext.locationParam == "DEPS")
+                {
+                    eachContext = eachContext.Replace("\"", "'");
+                }
                 newContents = contents.Insert(index, string.Format("\n{0}{1}", eachContext, (apeendNewline?"\n":"")));
             }
             else if (gradleContext.processType == AndroidGradleProcessType.Replace)
@@ -214,8 +388,24 @@ namespace TapTap.AndroidDependencyResolver.Editor
             {
                 if (gradleContext.processType == AndroidGradleProcessType.Insert)
                 {
-                    var temp = Regex.Match(contents, string.Format("^{0}", eachContext), RegexOptions.Multiline, TimeSpan.FromSeconds(2));
-                    hadWrote = temp.Success;
+                    if (hadWrote == false && gradleContext.locationParam == "DEPS")
+                    {
+                        var temp = Regex.Match(contents, string.Format("^\\s*{0}", eachContext), RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+                        hadWrote = temp.Success;
+                        if (hadWrote == false)
+                        {
+                            var tmpContext = eachContext.Replace("\"", "'");
+                            temp = Regex.Match(contents, string.Format("^\\s*{0}", tmpContext), RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+                            hadWrote = temp.Success;
+                        }
+                    }
+                    else
+                    {
+                        var temp = Regex.Match(contents, string.Format("^{0}", eachContext), RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+                        hadWrote = temp.Success;
+                    }
+                    // DEPS 中 ' 和 " 是相同的含义,所以需要特殊处理
+                    
                 }
                 else if (gradleContext.processType == AndroidGradleProcessType.Replace)
                 {
@@ -447,84 +637,84 @@ namespace TapTap.AndroidDependencyResolver.Editor
         }
         
         #region test code
-        // [MenuItem("Android/Test")]
-        // private static void Test()
-        // {
-        //     var providers = Load();
-        //     if (providers == null) return;
-        //     
-        //     foreach (var provider in providers)
-        //     {
-        //         if (provider.AndroidGradleContext == null) continue;
-        //         foreach (var context in provider.AndroidGradleContext)
-        //         {
-        //             try
-        //             {
-        //                 ProcessCustomGradleContext(context);
-        //             }
-        //             catch (Exception e)
-        //             {
-        //                 Debug.LogErrorFormat($"[TapTap.AGCP] Process Custom Gradle Context Error! Error Msg:\n{e.Message}\nError Stack:\n{e.StackTrace}");
-        //             }
-        //         }
-        //     }
-        // }
+
+        [MenuItem("TapTap/AndroidDependencyResolver/Resolve")]
+        internal static void MenuResolve()
+        {
+            Resolve(false);
+        }
+        
+        [MenuItem("TapTap/AndroidDependencyResolver/Force Resolve")]
+        internal static void MenuForceResolve()
+        {
+            Resolve(true);
+        }
+        
+        internal static void Resolve(bool resolveEDM4U)
+        {
+            var providers = Load();
+            if (providers == null) return;
+            Debug.LogFormat($"[TapTap.AGCP] Load Provider Count: {providers?.Count ?? -1}");
+            GenerateDependencies(providers);
+            var haveEDM4U = HaveEDM4U();
+            if (!haveEDM4U)
+            {
+                providers.Add(GetDependencies());
+            }
+            foreach (var provider in providers)
+            {
+                if (provider.AndroidGradleContext == null)
+                {
+                    Debug.LogFormat("[TapTap.AGCP] Provider: {0} return! since : provider.AndroidGradleContext == null", 0);
+                    continue;
+                }
+                if (provider.Use == false)
+                {
+                    Debug.LogFormat("[TapTap.AGCP] Provider: {0} return! since : provider.Use == false", 0);
+                    continue;
+                }
+
+                if (provider.Version != AndroidGradleProcessor.VERSION)
+                {
+                    Debug.LogFormat("[TapTap.AGCP] Provider: {0} return! since : provider.Version != VERSION", 0);
+                    continue;
+                }
+                foreach (var context in provider.AndroidGradleContext)
+                {
+                    try
+                    {
+                        if (IsDepsContext(context))
+                        {
+                            if (haveEDM4U)
+                                continue;
+                            else
+                            {
+                                if (provider.ModuleName != DEPENDENCIES_MODULE_NAME)
+                                    continue;
+                            }
+                        }
+                        ProcessCustomGradleContext(context);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogErrorFormat($"[TapTap.AGCP] Process Custom Gradle Context Error! Error Msg:\n{e.Message}\nError Stack:\n{e.StackTrace}");
+                    }
+                }
+
+                if (resolveEDM4U && haveEDM4U)
+                {
+                    var method = GetEDM4UResolveMethod();
+                    // 获取函数的参数类型
+                    Action action = () => { Debug.LogFormat("TapTap AndroidGradleProvider Call EDM4U Resolution complete"); };
+                    Action<bool> boolAction = (result) => { Console.WriteLine($"TapTap AndroidGradleProvider Call EDM4U Resolution complete with result: {result}"); };
+                    object[] parameters = { action, true, boolAction };
+                    
+                    method?.Invoke(null, parameters);
+                }
+            }
+        }
                 
-        // [MenuItem("Android/Regex")]
-        // private static void Regex()
-        // {
-        //     string packageNamePatter =
-        //         "\\s*([-\\w]{0,62}\\.\\s*)+[-\\w]{0,62}\\s*:\\s*[-\\w]{0,62}\\s*";
-        //     string versionNumberPatter =
-        //         "\\s*(\\d{1,3}\\.\\s*){1,3}\\d{1,3}\\s*";
-        //     string headerPatter = "^\\s*(\\/){0}\\s*\\w+\\s";
-        //     string packageAllPattern = headerPatter + "['\"]" + packageNamePatter + ":" + versionNumberPatter + "['\"]";
-        //         // "^\\s*(\\/){0}\\s*\\w+\\s['\"]\\s*([-\\w]{0,62}\\.\\s*)+[-\\w]{0,62}\\s*:\\s*[-\\w]{0,62}\\s*:\\s*(\\d{1,3}\\.\\s*){1,3}\\d{1,3}\\s*['\"]";
-        //     
-        //     var importMatch =
-        //         Regex.Match(
-        //             $"    implementation 'com.google.firebase:firebase-core:18.0.0'", packageAllPattern);
-        //     Debug.LogFormat($"importmatch result: {importMatch.Success}");
-        //     var pkgNameMatch =
-        //         Regex.Match(
-        //             $"//    implementation 'com.google.firebase:firebase-core:18.0.0'", packageNamePatter);
-        //     Debug.LogFormat($"importmatch result: {pkgNameMatch.Success}");
-        //     var verNumberMatch =
-        //         Regex.Match(
-        //             $"//    implementation 'com.google.firebase:firebase-core:18.0.0'", versionNumberPatter);
-        //     Debug.LogFormat($"importmatch result: {verNumberMatch.Success}");
-        //
-        //     var providers = Load();
-        //     if (providers == null) return;
-        //     providers.Sort((a,b)=> a.Priority.CompareTo(b.Priority));
-        //     foreach (var provider in providers)
-        //     {
-        //         if (provider.AndroidGradleContext == null) continue;
-        //         foreach (var context in provider.AndroidGradleContext)
-        //         {
-        //             var fileInfo = ToggleCustomTemplateFile(context.templateType, true);
-        //             if (fileInfo == null) return;
-        //             var contents = File.ReadAllText(fileInfo.FullName);
-        //             foreach (var processContent in context.processContent)
-        //             {
-        //                 var debug = processContent.Contains("    implementation 'com.google.firebase:firebase-core:18.0.0'");
-        //                 if (debug == false) continue;
-        //                 // 已经替换过的情况
-        //                 var importPkgNameMatch = "com.google.firebase:firebase-core";
-        //                 var pattern = "^\\s*(\\/){0}\\s*\\w+\\s['\"]" + importPkgNameMatch + ":" + versionNumberPatter +
-        //                               "['\"]";
-        //                 var builtinMatches = System.Text.RegularExpressions.
-        //                     Regex.Matches(contents, pattern, RegexOptions.Multiline);
-        //                 Debug.LogFormat($"FileInfo builtinMatches Result Count: {builtinMatches.Count}");
-        //                 var normalMatches = System.Text.RegularExpressions.
-        //                     Regex.Matches(contents, pattern, RegexOptions.Multiline);
-        //                 Debug.LogFormat($"FileInfo normalMatches Result Count: {normalMatches.Count}");
-        //                 
-        //             }
-        //         }
-        //     }
-        //
-        // }
+     
         #endregion
     }
 }
