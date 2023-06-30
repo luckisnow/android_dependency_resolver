@@ -2,7 +2,7 @@ fileFormatVersion: 2
 guid: 0a885ff5d175a4731948177a2dd2832b
 labels:
 - gvh
-- gvh_version-100.0.9
+- gvh_version-1.1.0
 - gvhp-exportPath-TapTap/AndroidDependencyResolver/ChangeLog.md
 TextScriptImporter:
   externalObjects: {}

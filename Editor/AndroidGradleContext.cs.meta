@@ -2,7 +2,7 @@ fileFormatVersion: 2
 guid: de8be490469542f19f5850e20cf834da
 labels:
 - gvh
-- gvh_version-100.0.9
+- gvh_version-1.1.0
 - gvhp-exportPath-TapTap/AndroidDependencyResolver/Editor/AndroidGradleContext.cs
 MonoImporter:
   externalObjects: {}
