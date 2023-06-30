@@ -34,9 +34,19 @@ namespace TapTap.AndroidDependencyResolver.Editor
         private static string _InternalGradlePropertiesTemplate;
         private static string _CustomGradlePropertiesTemplate;
 
-        private static Regex _DependenciesRegex = new Regex(@".*[/\\]Editor[/\\].*Dependencies\.xml$"); 
+        private static Regex _DependenciesRegex = new Regex(@".*Tap.*Dependencies\.xml$"); 
         private const string DEPENDENCIES_MODULE_NAME = "EDU4M_DEPEDENCY";
-        private const string DEPENDENCIES_FILE_NAME = "Assets/TapTap/AutoGenerate/Editor/TapTapAGPDependencies.xml";
+        private const string DEPENDENCIES_FILE_NAME = "Assets/TapTap/Gen/Editor/TapTapADRDependencies.xml";
+        
+        /// <summary>
+        /// Line that indicates the start of the injected dependencies block in the template.
+        /// </summary>
+        private const string DependenciesStartLine = "// TapTap Android Resolver Dependencies Start";
+
+        /// <summary>
+        /// Line that indicates the end of the injected dependencies block in the template.
+        /// </summary>
+        private const string DependenciesEndLine = "// TapTap Android Resolver Dependencies End";
 
         public static void SaveProvider(string path, AndroidGradleContextProvider provider, bool assetDatabaseRefresh = true)
         {
@@ -88,7 +98,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     }
                 }
             }
-            providers.Sort((a,b)=> a.Priority.CompareTo(b.Priority));
+            
             return providers;
         }
 
@@ -210,7 +220,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                 deps.AddRange(specs);
             }
             var provider = new AndroidGradleContextProvider();
-            provider.Priority = 9999;
+            provider.Priority = -1;
             provider.ModuleName = DEPENDENCIES_MODULE_NAME;
             provider.AndroidGradleContext = new List<AndroidGradleContext>();
             provider.AndroidGradleContext.Add(new AndroidGradleContext()
@@ -234,7 +244,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
 
         private static string[] LoadDependencies()
         {
-            var guids = AssetDatabase.FindAssets("TapTapAGPDependencies t:TextAsset", new[] { "Assets"});
+            var guids = AssetDatabase.FindAssets("Dependencies t:TextAsset", new[] {"Assets", "Packages"});
             HashSet<string> matchingEntries = new HashSet<string>();
             foreach (string assetGuid in guids) {
                 string filename = AssetDatabase.GUIDToAssetPath(assetGuid);
@@ -253,7 +263,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
             return entries;
         }
         
-        public static void ProcessCustomGradleContext(AndroidGradleContext gradleContext)
+        public static void ProcessCustomGradleContext(AndroidGradleContext gradleContext, bool haveEDM4U)
         {
             if (gradleContext == null) return;
             // 打开 Gradle 模板
@@ -263,16 +273,68 @@ namespace TapTap.AndroidDependencyResolver.Editor
                 Debug.LogFormat("[TapTap.AGCP] fileInfo == null return! gradleContext.template: {0}, gradleContext.Content: {1}", gradleContext.templateType, string.Join("||", gradleContext.processContent));
                 return;
             }
+
             // 逐行解决依赖
             for (var i = 0; i < gradleContext.processContent.Count; i++)
             {
                 var content = gradleContext.processContent[i];
                 var appendNewline = gradleContext.processType == AndroidGradleProcessType.Insert && i == 0;
-                ProcessEachContext(gradleContext, content, fileInfo, appendNewline);
+                ProcessEachContext(gradleContext, content, fileInfo, haveEDM4U, appendNewline);
             }
         }
         
-        private static void ProcessEachContext(AndroidGradleContext gradleContext, string eachContext, FileInfo gradleTemplateFileInfo, bool apeendNewline = false)
+        private static void CheckDepsHeadline(bool haveEDM4U)
+        {
+            var gradleTemplateFileInfo = ToggleCustomTemplateFile(CustomTemplateType.UnityMainGradle, true);
+            var contents = File.ReadAllText(gradleTemplateFileInfo.FullName);
+            
+            string clearContents = Regex.Replace(contents, string.Format(@"{0}[\s\S]*{1}", DependenciesStartLine, DependenciesEndLine), "");
+            if (!haveEDM4U)
+            {
+                // 定义要添加的依赖项字符串
+                string androidResolverDependencies = string.Format("**DEPS**\n\t{0}\n\t{1}", DependenciesStartLine, DependenciesEndLine);
+
+                // 使用正则表达式替换原始文本中的 **DEPS** 标记
+                string newContent = Regex.Replace(clearContents, @"\*\*DEPS\*\*", androidResolverDependencies);
+                File.WriteAllText(gradleTemplateFileInfo.FullName, newContent);
+            }
+            else
+            {
+                File.WriteAllText(gradleTemplateFileInfo.FullName, clearContents);
+            }
+        }
+        
+        private static string RemoveDuplicateFields(string input)
+        {
+            string[] lines = input.Split('\n');
+            HashSet<string> nonDuplicateLines = new HashSet<string>();
+
+            foreach (string line in lines)
+            {
+                string trimmedLine = line.Trim();
+                if (!nonDuplicateLines.Contains(trimmedLine))
+                {
+                    nonDuplicateLines.Add(trimmedLine);
+                }
+            }
+
+            string result = string.Join("\n", nonDuplicateLines);
+
+            return result;
+        }
+
+        // 因为 EDM4U 和 AGP 会同时修改 gradleTemplate.properties,并且 EMD4U 不会检查已经存在的内容，所以去掉重复添加的部分
+        private static void CheckGradlePropertiesTemplate(bool haveEDM4U)
+        {
+            var fileInfo = ToggleCustomTemplateFile(CustomTemplateType.GradleProperties, true);
+            if (fileInfo == null) return;
+            var contents = File.ReadAllText(fileInfo.FullName);
+            if (string.IsNullOrEmpty(contents)) return;
+            var newContents = RemoveDuplicateFields(contents);
+            File.WriteAllText(fileInfo.FullName, newContents);
+        }
+        
+        private static void ProcessEachContext(AndroidGradleContext gradleContext, string eachContext, FileInfo gradleTemplateFileInfo, bool haveEDM4U, bool apeendNewline = false)
         {
             // 检查 Unity 版本
             if (UnityVersionValidate(gradleContext) == false)
@@ -285,7 +347,11 @@ namespace TapTap.AndroidDependencyResolver.Editor
                 
             Match match = null;
             // 寻找修改位置
-            if (gradleContext.locationType == AndroidGradleLocationType.Builtin)
+            if (IsDepsContext(gradleContext) && !haveEDM4U)
+            {
+                match = Regex.Match(contents, $"{DependenciesStartLine}");
+            }
+            else if (gradleContext.locationType == AndroidGradleLocationType.Builtin)
             {
                 match = Regex.Match(contents, $"\\*\\*{gradleContext.locationParam}\\*\\*");
             }
@@ -318,20 +384,23 @@ namespace TapTap.AndroidDependencyResolver.Editor
             }
             
             // 已经替换过的情况
-            if (HadWrote(gradleContext, eachContext, contents, index))
+            if (HadWrote(gradleContext, eachContext, gradleTemplateFileInfo, ref contents, index))
             {
-                Debug.LogFormat($"[TapTap.AGCP] Gradle Content had wroten! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {eachContext}");
+                Debug.LogFormat("[TapTap.AGCP] Gradle Content had wroten! Gradle Template Name: {0} gradleContext Content: {1}", gradleTemplateFileInfo.Name, eachContext);
                 return;
             }
             // 检查是否需要引入,不能引入的原因是 gradle 已经存在 >= package 的版本
             var needImport = CheckNeedImport(gradleContext, eachContext, contents, gradleTemplateFileInfo, ref index, out string fixedContents);
             if (needImport == false)
             {
-                Debug.LogFormat($"[TapTap.AGCP] Gradle Content don't need Import! Gradle Template Name: {gradleTemplateFileInfo.Name} gradleContext Content: {eachContext}");
+                Debug.LogFormat("[TapTap.AGCP] Gradle Content don't need Import! Gradle Template Name: {0} gradleContext Content: {1}", gradleTemplateFileInfo.Name, eachContext);
                 return;
             }
             if (false == string.IsNullOrEmpty(fixedContents)) contents = fixedContents;
-            
+            if (IsDepsContext(gradleContext) && haveEDM4U)
+            {
+                return;
+            }
             // 替换新的修改内容
             string newContents = null;
             if (gradleContext.processType == AndroidGradleProcessType.Insert)
@@ -339,7 +408,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
                 // DEPS 中 ' 和 " 是相同的含义,所以需要特殊处理
                 if (gradleContext.locationParam == "DEPS")
                 {
-                    eachContext = eachContext.Replace("\"", "'");
+                    eachContext = eachContext.Replace("'", "\"");
                 }
                 newContents = contents.Insert(index, string.Format("\n{0}{1}", eachContext, (apeendNewline?"\n":"")));
             }
@@ -374,7 +443,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
         }
 
         // 是否已经写过
-        private static bool HadWrote(AndroidGradleContext gradleContext, string eachContext, string contents, int insertIndex)
+        private static bool HadWrote(AndroidGradleContext gradleContext, string eachContext, FileInfo gradleTemplateFileInfo, ref string contents, int insertIndex)
         {
             var hadWrote = false;
             
@@ -388,24 +457,30 @@ namespace TapTap.AndroidDependencyResolver.Editor
             {
                 if (gradleContext.processType == AndroidGradleProcessType.Insert)
                 {
+                    // DEPS 会清理所有之前插入的内容,因为新的内容需要放到DependenciesStartLine和DependenciesEndLine之间
                     if (hadWrote == false && gradleContext.locationParam == "DEPS")
                     {
-                        var temp = Regex.Match(contents, string.Format("^\\s*{0}", eachContext), RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+                        var temp = Regex.Match(contents, string.Format("^\\s*{0}", eachContext.Trim()), RegexOptions.Multiline);
                         hadWrote = temp.Success;
                         if (hadWrote == false)
                         {
                             var tmpContext = eachContext.Replace("\"", "'");
-                            temp = Regex.Match(contents, string.Format("^\\s*{0}", tmpContext), RegexOptions.Multiline, TimeSpan.FromSeconds(2));
+                            temp = Regex.Match(contents, string.Format("^\\s*{0}", tmpContext.Trim()), RegexOptions.Multiline);
                             hadWrote = temp.Success;
                         }
+                        if (hadWrote)
+                        {
+                            contents = contents.Remove(temp.Index, temp.Length + 1);
+                            File.WriteAllText(gradleTemplateFileInfo.FullName, contents);
+                        }
+
+                        hadWrote = false;
                     }
                     else
                     {
                         var temp = Regex.Match(contents, string.Format("^{0}", eachContext), RegexOptions.Multiline, TimeSpan.FromSeconds(2));
                         hadWrote = temp.Success;
                     }
-                    // DEPS 中 ' 和 " 是相同的含义,所以需要特殊处理
-                    
                 }
                 else if (gradleContext.processType == AndroidGradleProcessType.Replace)
                 {
@@ -636,7 +711,7 @@ namespace TapTap.AndroidDependencyResolver.Editor
             
         }
         
-        #region test code
+        #region Interface code
 
         [MenuItem("TapTap/AndroidDependencyResolver/Resolve")]
         internal static void MenuResolve()
@@ -650,17 +725,22 @@ namespace TapTap.AndroidDependencyResolver.Editor
             Resolve(true);
         }
         
-        internal static void Resolve(bool resolveEDM4U)
+        internal static void Resolve(bool forceResolve)
         {
             var providers = Load();
-            if (providers == null) return;
-            Debug.LogFormat($"[TapTap.AGCP] Load Provider Count: {providers?.Count ?? -1}");
             GenerateDependencies(providers);
             var haveEDM4U = HaveEDM4U();
-            if (!haveEDM4U)
+            var autoGenerateDepsProvider = GetDependencies();
+            providers.Add(autoGenerateDepsProvider);
+            providers.Sort((a,b)=> a.Priority.CompareTo(b.Priority));
+            // 当前有 TapTap 添加的 DEPS 依赖
+            if (autoGenerateDepsProvider.AndroidGradleContext.Count > 0 && autoGenerateDepsProvider.AndroidGradleContext[0].processContent.Count > 0)
             {
-                providers.Add(GetDependencies());
+                CheckDepsHeadline(haveEDM4U);
             }
+            
+            if (providers == null) return;
+            Debug.LogFormat($"[TapTap.AGCP] Load Provider Count: {providers?.Count ?? -1}");
             foreach (var provider in providers)
             {
                 if (provider.AndroidGradleContext == null)
@@ -685,33 +765,35 @@ namespace TapTap.AndroidDependencyResolver.Editor
                     {
                         if (IsDepsContext(context))
                         {
-                            if (haveEDM4U)
+                            if (provider.ModuleName != DEPENDENCIES_MODULE_NAME)
                                 continue;
-                            else
-                            {
-                                if (provider.ModuleName != DEPENDENCIES_MODULE_NAME)
-                                    continue;
-                            }
                         }
-                        ProcessCustomGradleContext(context);
+                        ProcessCustomGradleContext(context, haveEDM4U);
+
+                        if (IsDepsContext(context) && haveEDM4U)
+                        {
+                            EDM4UResolve(forceResolve);
+                        }
                     }
                     catch (Exception e)
                     {
-                        Debug.LogErrorFormat($"[TapTap.AGCP] Process Custom Gradle Context Error! Error Msg:\n{e.Message}\nError Stack:\n{e.StackTrace}");
+                        Debug.LogErrorFormat("[TapTap.AGCP] Process Custom Gradle Context Error! Error Msg:\n{0}\nError Stack:\n{1}", e.Message, e.StackTrace);
                     }
                 }
-
-                if (resolveEDM4U && haveEDM4U)
-                {
-                    var method = GetEDM4UResolveMethod();
-                    // 获取函数的参数类型
-                    Action action = () => { Debug.LogFormat("TapTap AndroidGradleProvider Call EDM4U Resolution complete"); };
-                    Action<bool> boolAction = (result) => { Console.WriteLine($"TapTap AndroidGradleProvider Call EDM4U Resolution complete with result: {result}"); };
-                    object[] parameters = { action, true, boolAction };
-                    
-                    method?.Invoke(null, parameters);
-                }
             }
+
+            CheckGradlePropertiesTemplate(haveEDM4U);
+        }
+
+        private static void EDM4UResolve(bool forceResolve)
+        {
+            var method = GetEDM4UResolveMethod();
+            // 获取函数的参数类型
+            Action action = () => { Debug.LogFormat("TapTap AndroidGradleProvider Call EDM4U Resolution complete"); };
+            Action<bool> boolAction = (result) => { Console.WriteLine($"TapTap AndroidGradleProvider Call EDM4U Resolution complete with result: {result}"); };
+            object[] parameters = { action, forceResolve, boolAction };
+                    
+            method?.Invoke(null, parameters);
         }
                 
      
